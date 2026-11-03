@@ -8,7 +8,7 @@ RISC-V core, and it happily runs from a small LiPo. So the board got a 7x7
 matrix on one side, a TP4056 charger and a USB-C socket on the other, and a
 5 mm hole in the neck for the keyring.
 
-![TinyKey board, front side](docs/images/board-hero.jpg)
+![TinyKey keychain, front side lit](docs/images/photo-front.jpg)
 
 ## The hardware
 
@@ -32,9 +32,9 @@ option bytes have to disable the reset function (`USER = 0x1F`) or the button
 reboots the chip instead of changing effect. The exact bytes and commands are
 in [docs/hardware.md](docs/hardware.md#pd7-is-nrst-by-default).
 
-| Front (49 LEDs) | Back (MCU, charger, buttons) |
+| Front, 49 LEDs lit | Back, cell taped over the charger |
 |---|---|
-| ![PCB front](docs/images/board-top.png) | ![PCB back](docs/images/board-bottom.png) |
+| ![TinyKey front](docs/images/photo-front.jpg) | ![TinyKey back](docs/images/photo-back.jpg) |
 
 Everything you need to build or order one:
 
@@ -46,9 +46,10 @@ Everything you need to build or order one:
   [BOM](hardware/bom.csv)
 - KiCad project: [hardware/](hardware/)
 
-The pictures above are renders generated from the board file, so they cannot
-go stale. Real photos will replace them once I have a finished unit; the shot
-list is in [docs/photos.md](docs/photos.md).
+The two photos above are the real board. The KiCad renders of the same PCB -
+[front](docs/images/board-top.png), [back](docs/images/board-bottom.png) - are
+still in the repo because they regenerate from `hardware/TinyKey.kicad_pcb` and
+show what a fresh, unpopulated board looks like.
 
 ## The software
 

@@ -1,33 +1,39 @@
-# Photo shot list
+# Photo notes
 
-The README currently uses 3D renders generated from the board file. Real photos
-will look better, but only add them when you have them - do not use stock
-images of a different board.
+The README uses two real photos (`photo-front.jpg`, `photo-back.jpg`, shot on a
+Galaxy A25 in Nov 2026). The rest of `docs/images/` is generated from the KiCad
+files.
 
-Suggested set, in order of importance:
+## What is in the repo
+
+| File | Status | What |
+|---|---|---|
+| `photo-front.jpg` | done | assembled board, LEDs running, keyring on |
+| `photo-back.jpg` | done | back side with the cell, TP4056, USB-C, buttons |
+| `board-top.png`, `board-bottom.png` | render | KiCad 3D render of the bare board |
+| `board-hero.jpg` | render | 3/4 render, kept as the fallback hero |
+| `schematic.png` | export | schematic preview used in the README |
+
+## Still missing
 
 | File | When | What |
 |---|---|---|
-| `photo-hero.jpg` | assembled + firmware running | the keychain at a 3/4 angle with the LEDs lit, dark background, text readable |
-| `photo-back.jpg` | assembled | back side: USB-C, buttons, MCU, keyring in place |
-| `photo-bare-front.jpg` | bare PCB from the fab | LED side, before soldering |
-| `photo-bare-back.jpg` | bare PCB from the fab | charger/MCU side, before soldering |
 | `demo.gif` | assembled | 5-8 s loop of the effects, LEDs lit |
+| `photo-bare-front.jpg` | next fab run | LED side before soldering |
+| `photo-bare-back.jpg` | next fab run | charger/MCU side before soldering |
 
-Practical notes:
+## Shooting them
 
-- Shoot the hero on a dark, non-reflective surface, one soft light from above
-  and slightly behind the camera; a phone in portrait is fine, crop to 3:2
-  landscape (~2400 px wide).
-- Use a tripod or rest the phone - the matrix is bright but the exposure is
-  long in a dark room. Underexpose slightly so the lit LEDs do not bloom into
-  white blobs.
-- For the demo GIF, record 5-8 s at 30 fps, crop to the board, resize to
-  800-1000 px wide and keep it under 10 MB so GitHub autoplays it.
-- Strip EXIF (especially GPS) before committing:
-  `exiftool -all= photo-hero.jpg`.
-- Keep the original photos out of the repo; only commit the resized versions.
+- Hero: dark, non-reflective surface, one soft light from above and slightly
+  behind the camera. Phone in portrait, crop to about 4:5.
+- Underexpose slightly when the matrix is lit, otherwise the LEDs bloom into
+  white blobs and you lose the row structure.
+- The back side is the hard one: the cell is matt silver and the silk is white,
+  so use a diffused light and keep it off-axis or the silkscreen blows out.
+- Demo GIF: record 5-8 s at 30 fps, crop to the board, resize to 800-1000 px
+  wide, keep it under 10 MB so GitHub autoplays it.
+- Strip EXIF before committing (GPS, phone model): `exiftool -all= photo.jpg`.
+  The two photos here were re-encoded through Pillow, which drops EXIF too.
+- Keep originals out of the repo; commit the resized versions only.
 
-Add the hero at the top of the README (replace the `board-hero.png` line) and
-put the rest in the Pictures section. Update `photo-*` names here if you use
-different ones.
+When swapping a photo in, update the table in `README.md` and this file.
