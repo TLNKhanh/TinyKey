@@ -1,0 +1,34 @@
+;
+; WinUSB primitive driver for WCH-LinkE RISC-V debug interface (VID_1A86&PID_8010&MI_00)
+;
+[Version]
+Signature   = "$Windows NT$"
+Class       = USB
+ClassGuid   = {88BAE032-5A81-49f0-BC3D-A4FF138216D6}
+Provider    = %ManufacturerName%
+DriverVer   = 10/18/2026,1.0.0.0
+CatalogFile = wchlink_winusb.cat
+
+[Manufacturer]
+%ManufacturerName% = Standard,NTamd64
+
+[Standard.NTamd64]
+%WCHLink.DeviceDesc% = WCHLink_Install, USB\VID_1A86&PID_8010&MI_00
+
+[WCHLink_Install.NT]
+Include = winusb.inf
+Needs   = WINUSB.NT
+
+[WCHLink_Install.NT.HW]
+AddReg = WCHLink.AddReg
+
+[WCHLink_Install.NT.Services]
+Include = winusb.inf
+Needs   = WINUSB.NT.Services
+
+[WCHLink.AddReg]
+HKR,,DeviceInterfaceGUIDs,0x10000,"{975D1D86-45D2-4A9D-9A2C-1C0FCE1A8A5A}"
+
+[Strings]
+ManufacturerName   = "WCH"
+WCHLink.DeviceDesc = "WCH-Link RISC-V Debug (WinUSB)"
