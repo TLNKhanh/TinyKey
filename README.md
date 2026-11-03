@@ -8,7 +8,7 @@ RISC-V core, and it happily runs from a small LiPo. So the board got a 7x7
 matrix on one side, a TP4056 charger and a USB-C socket on the other, and a
 5 mm hole in the neck for the keyring.
 
-![TinyKey keychain, front side lit](docs/images/photo-front.jpg)
+<p align="center"><img src="docs/images/photo-front.jpg" width="620" alt="TinyKey keychain, front side lit"></p>
 
 ## The hardware
 
