@@ -13,6 +13,8 @@ Dates are when the work happened on the bench, not release dates.
   binaries.
 - Added 3D renders, schematic and PCB PDFs, a BOM export, and filled in the
   schematic title block (TinyKey, rev v2, author).
+- Scroll text changed to `Nam Khanh` and the prebuilt Arduino binary rebuilt
+  (8932 B flash, 9100 B bin).
 
 ## 2026-11-01 - hardware v2
 

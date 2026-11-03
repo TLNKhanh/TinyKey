@@ -111,7 +111,7 @@ option-byte write and the usual minichlink problems are covered in
 ## Status
 
 Working prototype. The C firmware is the build that ran on the first board;
-the Arduino sketch is the newer rewrite and compiles to 8928 B of 16 kB. The
+the Arduino sketch is the newer rewrite and compiles to 8932 B of 16 kB. The
 prebuilt binaries come from the sources here, but flash and check them on your
 own board - they were built, not blessed.
 

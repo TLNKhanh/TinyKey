@@ -4,7 +4,7 @@ Compiled from the sources in this repository, ready for `minichlink`.
 
 | File | Size | MD5 | Source |
 |---|---|---|---|
-| `tinykey_v2.bin` | 9096 B | `9D207F20CB1ABE24136F4AFCE0A63AD4` | `firmware/arduino/tinykey_v2` |
+| `tinykey_v2.bin` | 9100 B | `C33EB38A51121352C6659D109233EAC7` | `firmware/arduino/tinykey_v2` |
 | `tinykey_led_test.bin` | 3356 B | `35822FCC4074547E3D8B2564944F81FF` | `firmware/c` (after the constant-dwell fix) |
 
 ```bash

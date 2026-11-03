@@ -10,7 +10,7 @@ arduino-cli compile --fqbn WCH:ch32v:CH32V00x_EVT:pnum=CH32V003F4 \
 timeout 30 minichlink -w out/tinykey_v2.ino.bin flash -b
 ```
 
-8928 B flash / 544 B RAM (54 % / 26 % of the CH32V003). The `--output-dir`
+8932 B flash / 544 B RAM (54 % / 26 % of the CH32V003). The `--output-dir`
 step matters: the WCH core's own uploader uses OpenOCD, which is flaky here -
 compile with `arduino-cli` and flash the `.bin` with minichlink.
 
@@ -51,7 +51,7 @@ Edit `TEXTS[]` near the top of `tinykey_v2.ino`:
 
 ```cpp
 static const char *const TEXTS[] = {
-    "Tà Mi",
+    "Nam Khanh",
 };
 ```
 

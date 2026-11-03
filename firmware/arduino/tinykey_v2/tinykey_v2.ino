@@ -15,7 +15,7 @@ static const uint8_t K_DPIN[6] = {0, 2, 3, 4, 5, 6};
 #define PWM_US       16
 
 static const char *const TEXTS[] = {
-    "Tà Mi",
+    "Nam Khanh",
 };
 #define TEXT_COUNT ((uint8_t)(sizeof(TEXTS) / sizeof(TEXTS[0])))
 
