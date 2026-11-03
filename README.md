@@ -55,18 +55,13 @@ like assembled, with a cell and a keyring on it.
 Front: 49 0805 LEDs wired as 7 anode rows and 7 cathode columns, 14 GPIOs in
 total. Back: the MCU, the charger, USB-C (power only, the data pins go nowhere),
 two buttons, SWIO pads for programming and B+/B- for the cell. Two layers, no
-series resistors on the matrix, current limited by keeping the GPIO drive at
-2 MHz.
+series resistors.
 
-Two things I learned the hard way:
+One thing that bit me: the first batch came back with all 49 LEDs soldered
+backwards. Instead of reworking 49 parts I flipped the drive polarity in
+firmware, so a lit LED is anode LOW, cathode HIGH. It still works that way.
 
-- The first batch came back with all 49 LEDs soldered backwards. Instead of
-  reworking 49 parts I flipped the drive polarity in firmware: a lit LED is
-  anode LOW, cathode HIGH. It still works that way.
-- The row scan needs a fixed 7 step frame. Skipping empty rows makes the
-  brightness pump while text scrolls.
-
-And one trap: BTN1 sits on PD7, which is NRST from the factory. Write the option
+One trap: BTN1 sits on PD7, which is NRST from the factory. Write the option
 bytes (`USER = 0x1F`) or the button reboots the chip instead of changing effect.
 The bytes and commands are in
 [docs/hardware.md](docs/hardware.md#pd7-is-nrst-by-default).
