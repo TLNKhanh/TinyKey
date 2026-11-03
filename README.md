@@ -17,6 +17,8 @@ and the KiCad hardware.
           keyring
 ```
 
+![TinyKey board, front side](docs/images/board-hero.jpg)
+
 ## Features
 
 - 7x7 LED matrix multiplexed onto 14 GPIOs, scanned one row at a time
@@ -108,6 +110,24 @@ make flash
   text editing, legacy sketches
 - [firmware/c/README.md](firmware/c/README.md) - C firmware, 14 effects
 - [CHANGELOG.md](CHANGELOG.md) - how the board and firmware evolved
+- [hardware/README.md](hardware/README.md) - board files, fabrication notes,
+  how the renders are generated
+- [docs/photos.md](docs/photos.md) - shot list for real photos of the board
+
+## Pictures and fabrication files
+
+| Front (49 LEDs) | Back (MCU, charger, buttons) |
+|---|---|
+| ![PCB front](docs/images/board-top.png) | ![PCB back](docs/images/board-bottom.png) |
+
+![Schematic](docs/images/schematic.png)
+
+- [Schematic (PDF)](docs/hardware/TinyKey-schematic.pdf)
+- [Gerbers](hardware/gerbers) and the [fab zip](hardware/TinyKeyV2_gerbers.zip)
+- The PCB pictures are 3D renders generated from `hardware/TinyKey.kicad_pcb`
+  with `kicad-cli pcb render`, so they match the current board. They will be
+  replaced by real photos of the assembled keychain; the shot list is in
+  [docs/photos.md](docs/photos.md).
 
 ## Status
 
