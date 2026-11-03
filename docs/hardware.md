@@ -99,6 +99,27 @@ SWIO/debug reset still works, so flashing and readback are unaffected.
 on the back is the charge LED. The current sketches do not use it; it is
 available if you want the matrix to show charging state.
 
+## Sleep
+
+There is no load switch and no separate power controller, so the only way to
+save power is the MCU itself. The Arduino sketch does this on BTN2:
+
+1. blank the matrix, so no row is driven and no LED is lit,
+2. wait for the button to be released, so the same press does not wake it,
+3. stop SysTick and execute `WFI`.
+
+The core then sits with its clock gated until a falling edge on PA1 (EXTI) wakes
+it. On wake SysTick is re-armed and the frame timers are reset, so the animation
+continues where it stopped instead of jumping.
+
+The C firmware has an older version of this: it blanks the display and keeps
+polling the buttons with a 20 ms delay, so the core stays awake. Only the
+Arduino sketch actually halts it.
+
+Sleep does not disconnect the cell either way. The TP4056 and the rest of the
+board still draw their quiescent current, and I have not measured it. If you
+care about standby life, that is the first thing to put a meter on.
+
 ## PCB revisions
 
 | File | Notes |

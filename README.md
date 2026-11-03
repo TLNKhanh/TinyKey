@@ -12,27 +12,16 @@ cents.
 
 ## Why a ten cent MCU
 
-The CH32V003F4P6 is a real 32-bit part, not a toy: RISC-V core at 48 MHz, 16 kB
-of flash, 2 kB of RAM, 18 GPIOs, plus UART, I2C, SPI and a 10-bit ADC, all in a
-TSSOP-20. It has no USB, no crystal, no external memory and no display
-controller. Everything it does, it does with pins and time.
+The CH32V003F4P6 costs about ten cents and it is a real 32-bit part: RISC-V at
+48 MHz, 16 kB flash, 2 kB RAM, 18 GPIOs, UART, I2C, SPI, a 10-bit ADC, all in a
+TSSOP-20. No USB, no crystal, no external memory, no display controller.
 
-That is exactly what makes it interesting. A 7x7 matrix needs 14 pins and 25
-bytes of frame buffer at 4 bits per LED. The scan loop has to keep a fixed
-frame time or the brightness wobbles. The chip has just enough of all three,
-and the firmware that drives the display is under 9 kB, so half the flash is
-still empty.
-
-The price is what changes the design. Ten cents is less than the LEDs it
-drives, so you stop designing around the chip and start designing around the
-display. There is no budget for an LED driver IC either, which is why the
-matrix hangs straight off the GPIOs with no series resistors, and the current
-limit comes from the 2 MHz GPIO drive setting rather than from parts.
-
-What that costs you is software: you write the row scan, tune the duty cycle,
-and find out that skipping an empty row shows up as a brightness jump while text
-scrolls. That is the whole trade, and it is a good one. The board ends up small
-and cheap, and the thing you spend is a weekend of pin twiddling.
+That is the whole appeal. A 7x7 matrix needs 14 pins and 25 bytes of frame
+buffer, and the scan has to keep a fixed frame time or the brightness wobbles.
+The chip has just enough of everything, so the money goes into the display
+instead of the silicon: no driver IC, no series resistors, and the current limit
+is the 2 MHz GPIO drive setting. What you pay in return is software, and for a
+keychain that is a good trade.
 
 ## V1 or V2?
 
@@ -79,13 +68,15 @@ Everything for ordering: [schematic PDF](docs/hardware/TinyKey-schematic.pdf),
 ## The software
 
 `firmware/arduino/tinykey_v2` is the current sketch, on the WCH Arduino core. It
-does 15 step software PWM per LED, so it can fade and scroll text sub-pixel.
-Eight effects: text, wave, ripple, rain, heart, bounce, chevron, and a face that
-blinks, because a 7x7 display deserves a face.
+scrolls "Hello World" and then nine generated patterns, with 15 step software
+PWM per LED so text fades and moves in sub-pixel steps.
 
 `firmware/c` is the smaller ch32v003fun build. One C file, 14 effects, no
-Arduino layer, and the one that first ran on the board. BTN1 cycles effects and
-BTN2 sleeps, though BTN2 was flaky on my prototype, so treat sleep as a bonus.
+Arduino layer, and the one that first ran on the board.
+
+BTN1 steps through the patterns. BTN2 sleeps: the sketch blanks the matrix,
+stops the tick and halts the core with `WFI`, and the next press wakes it. There
+is no load switch on the board, so that is all the power management there is.
 
 ### Build and flash
 
@@ -116,7 +107,7 @@ helper and flash scripts, `prebuilt/` the binaries.
 ## Status
 
 V1 works. V2 is files and gerbers, not silicon. The Arduino sketch compiles to
-8932 B of 16 kB. The prebuilt binaries came from these sources, but I have not
+9172 B of 16 kB. The prebuilt binaries came from these sources, but I have not
 tried them on anyone else's board.
 
 MIT, see [LICENSE](LICENSE).

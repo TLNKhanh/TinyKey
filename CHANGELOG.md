@@ -15,6 +15,9 @@ Dates are when the work happened on the bench, not release dates.
   schematic title block (TinyKey, rev v2, author).
 - Scroll text changed to `Nam Khanh` and the prebuilt Arduino binary rebuilt
   (8932 B flash, 9100 B bin).
+- Arduino sketch rewritten with per-section comments: `px`/`disp` split, 15-step
+  blend, UTF-8 text (`á`/`à` glyphs), 9 generated patterns, and a real `WFI`
+  sleep on BTN2. Demo text is `Hello World`. Now 9172 B flash / 572 B RAM.
 - Added real photos of the assembled keychain (front with the LEDs running,
   back with the cell taped over the charger), published the repo as
   [TLNKhanh/TinyKey](https://github.com/TLNKhanh/TinyKey), then rewrote the

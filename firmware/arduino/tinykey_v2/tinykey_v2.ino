@@ -1,390 +1,419 @@
+// TinyKey v2 - 7x7 LED matrix keychain, CH32V003F4P6
+//
+// Hardware (details in docs/hardware.md):
+//   rows     (anodes)    PC0..PC6        active LOW
+//   columns  (cathodes)  PC7, PD0, PD2..PD6   active HIGH
+//   BTN1  PD7  cycle effect
+//   BTN2  PA1  sleep / wake
+//
+// There is no display driver and no series resistor on the matrix, so the whole
+// display is a software row scan: switch on one row, drive that row's columns,
+// hold for PWM_US, move to the next row. One frame is 7 rows x 15 PWM steps x
+// 16 us, about 1.7 ms, so the matrix refreshes around 590 Hz and nobody sees it
+// flicker. Current is limited by the 2 MHz GPIO drive, not by parts.
+//
+// File layout, top to bottom:
+//   config and pin masks
+//   buffers (one bitmap, one PWM value per LED)
+//   low level: blank the matrix, scan one frame
+//   blending: fade the PWM values toward the bitmap
+//   font and UTF-8 helpers
+//   frame builders: text scroll plus the nine generated effects
+//   buttons, sleep, setup and loop
+
 #include <Arduino.h>
 
-#define NIB(p)      (0xFu << ((p) * 4))
-#define CFG_PU      0x8u
+// ---------------------------------------------------------------- config ---
 
-static const uint8_t K_DPIN[6] = {0, 2, 3, 4, 5, 6};
-#define D_CATH_MASK (NIB(0) | NIB(2) | NIB(3) | NIB(4) | NIB(5) | NIB(6))
-#define D_OUT_MASK  ((1u << 0) | (1u << 2) | (1u << 3) | (1u << 4) | (1u << 5) | (1u << 6))
+#define SPEED_MS      55   // ms per scroll step / effect step
+#define BRIGHTNESS    15   // 0..LMAX, scales every PWM value
 
-#define STEP_MS      85
-#define DEBOUNCE_MS  20
-
-#define BRIGHT       7
-#define PWM_STEPS    15
-#define PWM_US       16
-
-static const char *const TEXTS[] = {
-    "Nam Khanh",
+static const char* MSGS[] = {
+    "Hello World",
 };
-#define TEXT_COUNT ((uint8_t)(sizeof(TEXTS) / sizeof(TEXTS[0])))
+#define MSG_COUNT ((int)(sizeof(MSGS)/sizeof(MSGS[0])))
 
-enum { FX_TEXT, FX_WAVE, FX_RIPPLE, FX_RAIN, FX_HEART, FX_BALL, FX_CHEVRON, FX_FACE, FX_COUNT };
+#define NIB(p)        (0xFu << ((p) * 4))   // 4-bit pin config field for pin p
 
-static uint8_t fb[7];
-static uint8_t px[7][7];
+// Column 0 lives on PC7, columns 1..6 on these PD pins.
+static const uint8_t K_DPIN[6] = {0, 2, 3, 4, 5, 6};
+
+#define D_COL_MASK     ((1u<<0)|(1u<<2)|(1u<<3)|(1u<<4)|(1u<<5)|(1u<<6))
+#define D_COL_MASK_NIB (NIB(0)|NIB(2)|NIB(3)|NIB(4)|NIB(5)|NIB(6))
+
+#define ROW_MASK      0x007Fu   // PC0..PC6, the seven rows
+#define COL0_BIT      (1u << 7) // PC7, column 0
+
+#define DEBOUNCE_MS   20
+#define PWM_STEPS     15    // brightness levels per LED
+#define LMAX          PWM_STEPS
+#define PWM_US        16    // hold time per PWM step
+
+#define NON_SCROLL_FX 9     // generated effects after the text
+#define TOTAL_STEPS   (MSG_COUNT + NON_SCROLL_FX)
+
+#define BTN1_PIN       PD7
+#define BTN2_PIN       PA1
+#define BTN1_PIN_NIB   NIB(7)
+#define BTN2_PIN_NIB   NIB(1)
+#define BTN1_OUTDR_BIT (1u << 7)
+#define BTN2_OUTDR_BIT (1u << 1)
+
+#define ABS(x)         ((x) < 0 ? -(x) : (x))
+
+// --------------------------------------------------------------- buffers ---
+
+static uint8_t  fb[7];        // current picture, one bit per LED, row major
+static uint8_t  px[7][7];     // faded PWM value per LED (what blendFrame moves)
+static uint8_t  disp[7][7];   // value the scan actually shows (px * brightness)
+static uint16_t g_msg_cols[MSG_COUNT];  // text length in columns, 6 per char
+
+static uint32_t current_step = 0;   // 0..MSG_COUNT-1 text, then effects
+static uint32_t current_p    = 0;   // position inside the current step
+static uint32_t lastFrame    = 0;
+static uint32_t lastBlend    = 0;
+
+// ------------------------------------------------------------- low level ---
+
+// All rows high (off), all columns low (off). Also used before sleeping.
+static void allOff() {
+    GPIOC->OUTDR = ROW_MASK;
+    GPIOD->OUTDR &= ~D_COL_MASK;
+}
+
+// One complete frame: for every row, run 15 PWM steps and light the columns
+// whose value is above the current step. The row is switched off again after
+// its 15 steps, so only one row conducts at a time.
+static void renderFrame() {
+    for (uint8_t r = 0; r < 7; r++) {
+        uint32_t rowC = ROW_MASK & ~(1u << r);   // pull this row low = on
+        for (uint8_t s = 0; s < PWM_STEPS; s++) {
+            uint32_t outC = rowC;
+            if (disp[r][0] > s) outC |= COL0_BIT;
+            uint32_t outD = 0;
+            for (uint8_t c = 1; c < 7; c++)
+                if (disp[r][c] > s) outD |= (1u << K_DPIN[c - 1]);
+            GPIOC->OUTDR = outC;
+            GPIOD->OUTDR = (GPIOD->OUTDR & ~D_COL_MASK) | outD;
+            delayMicroseconds(PWM_US);
+        }
+        GPIOC->OUTDR = ROW_MASK;
+        GPIOD->OUTDR &= ~D_COL_MASK;
+    }
+}
+
+// Move every LED a quarter of the way toward its target (on or off) and apply
+// the brightness scale. Called every 15 ms, which is what gives the text its
+// soft edges instead of hard on/off pixels.
+static void blendFrame() {
+    for (uint8_t r = 0; r < 7; r++)
+        for (uint8_t c = 0; c < 7; c++) {
+            uint8_t tgt = (fb[r] & (1u << c)) ? LMAX : 0;
+            px[r][c]    = (uint8_t)((px[r][c] + 3u * tgt + 2u) >> 2);
+            disp[r][c]  = (uint8_t)(((uint16_t)px[r][c] * BRIGHTNESS + (LMAX / 2)) / LMAX);
+        }
+}
+
+// ------------------------------------------------------------------ font ---
+// 5 columns per glyph, left to right, bit 0 = top row. str_col() adds a sixth
+// blank column between characters.
 
 static const char FONT_CHARS[] = " !'-.,:?0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-static const uint8_t FONT[][5] = {
-    {0x00,0x00,0x00,0x00,0x00},
-    {0x00,0x00,0x5F,0x00,0x00},
-    {0x00,0x00,0x03,0x00,0x00},
-    {0x00,0x08,0x08,0x08,0x00},
-    {0x00,0x60,0x60,0x00,0x00},
-    {0x00,0x60,0x20,0x00,0x00},
-    {0x00,0x36,0x36,0x00,0x00},
-    {0x02,0x01,0x51,0x09,0x06},
-    {0x3E,0x51,0x49,0x45,0x3E},
-    {0x00,0x42,0x7F,0x40,0x00},
-    {0x42,0x61,0x51,0x49,0x46},
-    {0x41,0x49,0x49,0x49,0x36},
-    {0x18,0x14,0x12,0x7F,0x10},
-    {0x27,0x45,0x45,0x45,0x39},
-    {0x3C,0x4A,0x49,0x49,0x30},
-    {0x01,0x71,0x09,0x05,0x03},
-    {0x36,0x49,0x49,0x49,0x36},
-    {0x06,0x49,0x49,0x29,0x1E},
-    {0x7E,0x09,0x09,0x09,0x7E},
-    {0x7F,0x49,0x49,0x49,0x36},
-    {0x3E,0x41,0x41,0x41,0x22},
-    {0x7F,0x41,0x41,0x41,0x3E},
-    {0x7F,0x49,0x49,0x49,0x41},
-    {0x7F,0x09,0x09,0x09,0x01},
-    {0x3E,0x41,0x49,0x49,0x3A},
-    {0x7F,0x08,0x08,0x08,0x7F},
-    {0x41,0x41,0x7F,0x41,0x41},
-    {0x20,0x40,0x41,0x3F,0x01},
-    {0x7F,0x08,0x14,0x22,0x41},
-    {0x7F,0x40,0x40,0x40,0x40},
-    {0x7F,0x02,0x0C,0x02,0x7F},
-    {0x7F,0x02,0x04,0x08,0x7F},
-    {0x3E,0x41,0x41,0x41,0x3E},
-    {0x7F,0x09,0x09,0x09,0x06},
-    {0x3E,0x41,0x41,0x21,0x1E},
-    {0x7F,0x09,0x19,0x29,0x46},
-    {0x46,0x49,0x49,0x49,0x31},
-    {0x01,0x01,0x7F,0x01,0x01},
-    {0x3F,0x40,0x40,0x40,0x3F},
-    {0x1F,0x20,0x40,0x20,0x1F},
-    {0x7F,0x20,0x10,0x20,0x7F},
-    {0x63,0x14,0x08,0x14,0x63},
-    {0x03,0x04,0x78,0x04,0x03},
-    {0x61,0x51,0x49,0x45,0x43},
-    {0x20,0x54,0x54,0x54,0x78},
-    {0x7F,0x44,0x44,0x44,0x38},
-    {0x38,0x44,0x44,0x44,0x44},
-    {0x38,0x44,0x44,0x44,0x7F},
-    {0x38,0x54,0x54,0x54,0x18},
-    {0x04,0x7E,0x05,0x05,0x00},
-    {0x4C,0x52,0x52,0x12,0x3E},
-    {0x7F,0x04,0x04,0x04,0x78},
-    {0x00,0x44,0x7D,0x40,0x00},
-    {0x40,0x40,0x40,0x3D,0x00},
-    {0x7F,0x10,0x28,0x44,0x00},
-    {0x00,0x41,0x7F,0x40,0x00},
-    {0x7C,0x04,0x78,0x04,0x7C},
-    {0x7C,0x04,0x04,0x04,0x78},
-    {0x38,0x44,0x44,0x44,0x38},
-    {0x7C,0x24,0x24,0x24,0x18},
-    {0x18,0x24,0x24,0x24,0x7C},
-    {0x7C,0x04,0x04,0x04,0x08},
-    {0x48,0x54,0x54,0x54,0x24},
-    {0x04,0x3F,0x44,0x44,0x00},
-    {0x3C,0x40,0x40,0x40,0x7C},
-    {0x1C,0x20,0x40,0x20,0x1C},
-    {0x3C,0x40,0x30,0x40,0x3C},
-    {0x44,0x28,0x10,0x28,0x44},
-    {0x0C,0x50,0x20,0x10,0x0C},
-    {0x44,0x64,0x54,0x4C,0x44},
-    {0x20,0x55,0x56,0x54,0x78},
+static const uint8_t FONT[] = {
+    0x00,0x00,0x00,0x00,0x00, 0x00,0x00,0x5F,0x00,0x00, 0x00,0x07,0x00,0x00,0x00,
+    0x08,0x08,0x08,0x08,0x08, 0x00,0x60,0x60,0x00,0x00, 0x00,0x60,0x20,0x00,0x00,
+    0x00,0x36,0x36,0x00,0x00, 0x02,0x01,0x51,0x09,0x06, 0x3E,0x41,0x49,0x41,0x3E,
+    0x00,0x42,0x7F,0x40,0x00, 0x42,0x61,0x51,0x49,0x46, 0x21,0x41,0x45,0x4B,0x31,
+    0x18,0x14,0x12,0x7F,0x10, 0x27,0x45,0x45,0x45,0x39, 0x3C,0x4A,0x49,0x49,0x30,
+    0x01,0x71,0x09,0x05,0x03, 0x36,0x49,0x49,0x49,0x36, 0x06,0x49,0x49,0x29,0x1E,
+    0x7E,0x09,0x09,0x09,0x7E, 0x7F,0x49,0x49,0x49,0x36, 0x3E,0x41,0x41,0x41,0x22,
+    0x7F,0x41,0x41,0x22,0x1C, 0x7F,0x49,0x49,0x49,0x41, 0x7F,0x09,0x09,0x09,0x01,
+    0x3E,0x41,0x49,0x49,0x7B, 0x7F,0x08,0x08,0x08,0x7F, 0x00,0x41,0x7F,0x41,0x00,
+    0x20,0x40,0x41,0x7F,0x01, 0x7F,0x08,0x14,0x22,0x41, 0x7F,0x40,0x40,0x40,0x40,
+    0x7F,0x02,0x0C,0x02,0x7F, 0x7F,0x04,0x08,0x10,0x7F, 0x3E,0x41,0x41,0x41,0x3E,
+    0x7F,0x09,0x09,0x09,0x06, 0x3E,0x41,0x51,0x21,0x5E, 0x7F,0x09,0x19,0x29,0x46,
+    0x46,0x49,0x49,0x49,0x31, 0x01,0x01,0x7F,0x01,0x01, 0x3F,0x40,0x40,0x40,0x3F,
+    0x1F,0x20,0x40,0x20,0x1F, 0x3F,0x40,0x38,0x40,0x3F, 0x63,0x14,0x08,0x14,0x63,
+    0x07,0x08,0x70,0x08,0x07, 0x61,0x51,0x49,0x45,0x43, 0x20,0x54,0x54,0x54,0x78,
+    0x7F,0x48,0x44,0x44,0x38, 0x38,0x44,0x44,0x44,0x20, 0x38,0x44,0x44,0x48,0x7F,
+    0x38,0x54,0x54,0x54,0x18, 0x08,0x7E,0x09,0x01,0x02, 0x08,0x14,0x54,0x54,0x3C,
+    0x7F,0x08,0x04,0x04,0x78, 0x00,0x44,0x7D,0x40,0x00, 0x20,0x40,0x44,0x3D,0x00,
+    0x7F,0x10,0x28,0x44,0x00, 0x00,0x00,0x7F,0x00,0x00, 0x7C,0x04,0x18,0x04,0x78,
+    0x7C,0x08,0x04,0x04,0x78, 0x38,0x44,0x44,0x44,0x38, 0x7C,0x14,0x14,0x14,0x08,
+    0x08,0x14,0x14,0x18,0x7C, 0x7C,0x08,0x04,0x04,0x08, 0x48,0x54,0x54,0x54,0x20,
+    0x04,0x3F,0x44,0x40,0x20, 0x3C,0x40,0x40,0x20,0x7C, 0x1C,0x20,0x40,0x20,0x1C,
+    0x3C,0x40,0x30,0x40,0x3C, 0x44,0x28,0x10,0x28,0x44, 0x0C,0x50,0x50,0x50,0x3C,
+    0x44,0x64,0x54,0x4C,0x44
 };
-#define FONT_AGRAVE 70
 
-static const uint8_t FACE[][7] = {
-    {0x00,0x36,0x36,0x00,0x22,0x1C,0x00},
-    {0x00,0x36,0x36,0x00,0x1C,0x14,0x1C},
-    {0x00,0x00,0x36,0x00,0x1C,0x14,0x00},
-    {0x00,0x06,0x36,0x00,0x22,0x1C,0x00},
-    {0x00,0x36,0x36,0x00,0x3E,0x22,0x1C},
-    {0x00,0x22,0x77,0x22,0x00,0x22,0x1C},
-    {0x00,0x55,0x77,0x00,0x11,0x15,0x0A},
-};
-#define FACE_COUNT ((uint8_t)(sizeof(FACE) / sizeof(FACE[0])))
+// "a" with a grave and an acute accent, so MSGS can hold real UTF-8 Vietnamese
+// text. Two bytes in, one glyph out.
+static const uint8_t GLYPH_A_GRAVE[5] = {0x20,0x55,0x56,0x54,0x78};
+static const uint8_t GLYPH_A_ACUTE[5] = {0x20,0x56,0x55,0x54,0x78};
 
-static uint32_t hash32(uint32_t x) { x ^= x >> 13; x *= 1274126177u; x ^= x >> 16; return x; }
-
-static const int8_t WAVE[16] = {0,1,2,2,3,2,2,1,0,-1,-2,-2,-3,-2,-2,-1};
-
-static void allOff() {
-  GPIOC->OUTDR = 0x007Fu;
-  GPIOD->OUTDR &= ~D_OUT_MASK;
+// Index into FONT, or 7 ('?') for anything the font does not have.
+static int font_index(uint8_t ch) {
+    for (int i = 0; FONT_CHARS[i]; i++)
+        if ((uint8_t)FONT_CHARS[i] == ch) return i;
+    return 7;
 }
 
-static void renderFrame() {
-  for (uint8_t r = 0; r < 7; r++) {
-    uint32_t rowC = 0x7Fu & ~(1u << r);
-    for (uint8_t s = 0; s < PWM_STEPS; s++) {
-      uint32_t outC = rowC;
-      if (px[r][0] > s) outC |= (1u << 7);
-      uint32_t outD = 0;
-      for (uint8_t c = 1; c < 7; c++)
-        if (px[r][c] > s) outD |= (1u << K_DPIN[c - 1]);
-      GPIOC->OUTDR = outC;
-      GPIOD->OUTDR = (GPIOD->OUTDR & ~D_OUT_MASK) | outD;
-      delayMicroseconds(PWM_US);
-    }
-    GPIOC->OUTDR = 0x007Fu;
-    GPIOD->OUTDR &= ~D_OUT_MASK;
-  }
+// Length in characters. This font only sees 0xC3 as a lead byte, which covers
+// the Latin-1 accented letters used here.
+static int utf8_len(const char* s) {
+    int n = 0, i = 0;
+    while (s[i]) { i += ((uint8_t)s[i] == 0xC3) ? 2 : 1; n++; }
+    return n;
 }
 
-static void blendFrame() {
-  for (uint8_t r = 0; r < 7; r++)
-    for (uint8_t c = 0; c < 7; c++) {
-      uint8_t tgt = (fb[r] & (1u << c)) ? BRIGHT : 0;
-      px[r][c] = (uint8_t)((px[r][c] + tgt + 1u) >> 1);
+// Byte offset of character ch_idx in a UTF-8 string.
+static int utf8_byte_offset(const char* s, int ch_idx) {
+    int i = 0;
+    while (s[i] && ch_idx > 0) {
+        i += ((uint8_t)s[i] == 0xC3) ? 2 : 1;
+        ch_idx--;
+    }
+    return i;
+}
+
+// One column of one character, 0..6 (6 is the gap between glyphs).
+static uint8_t str_col(const char *s, int len6, int i) {
+    if (i < 0 || i >= len6) return 0;
+    int ch = i / 6, k = i % 6;
+    if (k == 5) return 0;
+    int off = utf8_byte_offset(s, ch);
+    if (s[off] == 0) return 0;
+    if ((uint8_t)s[off] == 0xC3) {
+        uint8_t b2 = (uint8_t)s[off + 1];
+        if (b2 == 0)    return 0;
+        if (b2 == 0xA0) return GLYPH_A_GRAVE[k];
+        if (b2 == 0xA1) return GLYPH_A_ACUTE[k];
+        return 0;
+    }
+    return FONT[font_index((uint8_t)s[off]) * 5 + k];
+}
+
+// Triangle wave 0..LMAX with a 16 step period, used by every generated effect.
+static uint8_t wave_val(int x) {
+    int w = x % 16;
+    if (w < 0) w += 16;
+    if (w > 8) w = 16 - w;
+    return (w * LMAX) / 8;
+}
+
+// ---------------------------------------------------------- frame builder ---
+
+// Fill fb (or disp) for one step. Text scrolls right to left and goes through
+// blendFrame for smooth edges. The generated effects write disp directly, they
+// are already soft because wave_val returns a PWM level.
+static void build_frame(uint8_t step, uint32_t p) {
+    uint8_t r, c;
+
+    if (step < MSG_COUNT) {
+        for (r = 0; r < 7; r++) fb[r] = 0;
+        int len6 = (int)g_msg_cols[step];
+        // +6 so the text starts off screen on the right, +7 so it leaves fully.
+        uint32_t pos = (p + 6) % ((uint32_t)len6 + 7u);
+        for (c = 0; c < 7; c++) {
+            uint8_t col = str_col(MSGS[step], len6, (int)pos + (int)c - 6);
+            for (r = 0; r < 7; r++) if (col & (1u << r)) fb[r] |= (uint8_t)(1u << c);
+        }
+        return;
+    }
+
+    uint8_t fx = (uint8_t)(step - MSG_COUNT);
+
+    // fx 2: two chevrons scrolling down, drawn from a bitmap so it needs the
+    // normal blend path.
+    if (fx == 2) {
+        static const uint8_t ARR[7] = {0x60, 0x30, 0x18, 0x0C, 0x18, 0x30, 0x60};
+        int x1 = 7 - (int)(p % 14);
+        int x2 = 7 - (int)((p + 7) % 14);
+        for (r = 0; r < 7; r++) {
+            uint8_t v = ARR[r];
+            uint8_t out = 0;
+            if (x1 >= 0 && x1 < 7) out |= (v << x1) & 0x7F;
+            else if (x1 < 0 && x1 > -7) out |= (v >> -x1) & 0x7F;
+            if (x2 >= 0 && x2 < 7) out |= (v << x2) & 0x7F;
+            else if (x2 < 0 && x2 > -7) out |= (v >> -x2) & 0x7F;
+            fb[r] = out;
+        }
+        return;
+    }
+
+    // The rest are distance based: pick a distance from the centre, turn it into
+    // a wave value, done. dr/dc are -3..3 from the middle LED.
+    for (r = 0; r < 7; r++) {
+        for (c = 0; c < 7; c++) {
+            uint8_t val = 0;
+            int dr = r - 3;
+            int dc = c - 3;
+
+            switch (fx) {
+                case 0: {   // square rings
+                    int d = ABS(dr) > ABS(dc) ? ABS(dr) : ABS(dc);
+                    val = wave_val(d * 4 - p);
+                    break;
+                }
+                case 1: {   // diagonal stripes
+                    val = wave_val(r * 2 + c * 2 + p);
+                    break;
+                }
+                case 3: {   // diamonds
+                    int d = ABS(dr) + ABS(dc);
+                    val = wave_val(d * 3 - p);
+                    break;
+                }
+                case 4: {   // circles
+                    int d2 = dr*dr + dc*dc;
+                    val = wave_val(d2 * 2 - p);
+                    break;
+                }
+                case 5: {   // diagonal lines
+                    int d = ABS(ABS(dr) - ABS(dc));
+                    val = wave_val(d * 4 - p);
+                    break;
+                }
+                case 6: {   // cross
+                    int d = ABS(dr) < ABS(dc) ? ABS(dr) : ABS(dc);
+                    val = wave_val(d * 4 - p);
+                    break;
+                }
+                case 7: {   // two axes interfering
+                    uint8_t v1 = wave_val(r * 4 + p);
+                    uint8_t v2 = wave_val(c * 4 - p);
+                    val = (v1 + v2) / 2;
+                    break;
+                }
+                case 8: {   // frame pulse
+                    int d = ABS(dr) > ABS(dc) ? ABS(dr) : ABS(dc);
+                    int fd = ABS(d - 3);
+                    val = wave_val(fd * 4 - p);
+                    break;
+                }
+            }
+            disp[r][c] = (uint8_t)(((uint16_t)val * BRIGHTNESS + (LMAX / 2)) / LMAX);
+        }
     }
 }
 
-static int font_index(char ch) {
-  for (int i = 0; FONT_CHARS[i]; i++) if (FONT_CHARS[i] == ch) return i;
-  return 7;
+// --------------------------------------------------------------- buttons ---
+// Both buttons are pulled up, so a pressed button reads 0 on the input register.
+
+static inline uint8_t readB1() { return (GPIOD->INDR & BTN1_OUTDR_BIT) ? 0 : 1; }
+static inline uint8_t readB2() { return (GPIOA->INDR & BTN2_OUTDR_BIT) ? 0 : 1; }
+
+static void wake_isr() { }   // only here so EXTI has somewhere to return to
+
+// Blank the display, wait for BTN2 to be released (so the press that put us to
+// sleep does not immediately wake us), then stop SysTick and halt the core with
+// WFI. A falling edge on BTN2 wakes it, SysTick restarts, and the frame timers
+// are reset so nothing thinks a whole sleep worth of time has passed.
+static void enterSleepMode() {
+    allOff();
+    while (readB2()) {
+        delay(10);
+    }
+    delay(50);
+    SysTick->CTLR = 0;
+    __WFI();
+    SysTick->CTLR = 0xF;
+    lastFrame = millis();
+    lastBlend = millis();
 }
 
-static int text_len(const char *s) {
-  const uint8_t *p = (const uint8_t *)s;
-  int n = 0;
-  while (*p) {
-    if ((*p & 0xE0u) == 0xC0u && (p[1] & 0xC0u) == 0x80u) p++;
-    p++;
-    n++;
-  }
-  return n;
-}
-
-static uint8_t text_col(const char *s, int i) {
-  if (i < 0) return 0;
-  int ch = i / 6;
-  int k = i % 6;
-  if (k == 5) return 0;
-  const uint8_t *p = (const uint8_t *)s;
-  for (int n = 0; *p; n++) {
-    if (n == ch) {
-      if (*p == 0xC3u && p[1] == 0xA0u) return FONT[FONT_AGRAVE][k];
-      return FONT[font_index((char)*p)][k];
-    }
-    if ((*p & 0xE0u) == 0xC0u && (p[1] & 0xC0u) == 0x80u) p++;
-    p++;
-  }
-  return 0;
-}
-
-static void build_frame(uint8_t fx, uint32_t p) {
-  uint8_t r, c;
-  for (r = 0; r < 7; r++) fb[r] = 0;
-
-  switch (fx) {
-
-  case FX_TEXT: {
-    static uint8_t ti = 0;
-    static uint16_t tx = 0;
-    static uint32_t tp = 0xFFFFFFFFu;
-    if (p != tp) {
-      tp = p;
-      if (p == 0) tx = 0;
-      uint16_t len = (uint16_t)(text_len(TEXTS[ti]) * 6u);
-      if (tx > (uint16_t)(len + 7u)) {
-        tx = 0;
-        ti = (uint8_t)((ti + 1u) % TEXT_COUNT);
-      }
-      tx++;
-    }
-    int base = (int)tx - 7;
-    for (c = 0; c < 7; c++) {
-      uint8_t bits = text_col(TEXTS[ti], base + (int)c);
-      for (r = 0; r < 7; r++)
-        if (bits & (1u << r)) fb[r] |= (uint8_t)(1u << c);
-    }
-    break;
-  }
-
-  case FX_WAVE:
-    for (c = 0; c < 7; c++) {
-      int row = 3 + WAVE[(c + (int)p) & 15];
-      if (row < 7) fb[row] |= (uint8_t)(1u << c);
-      if (row + 1 < 7) fb[row + 1] |= (uint8_t)(1u << c);
-    }
-    break;
-
-  case FX_RIPPLE: {
-    int phase = (int)((p >> 1) & 3u);
-    for (r = 0; r < 7; r++)
-      for (c = 0; c < 7; c++) {
-        int dr = (r > 3) ? r - 3 : 3 - r;
-        int dc = (c > 3) ? c - 3 : 3 - c;
-        int d = (dr > dc) ? dr : dc;
-        if (d == phase) fb[r] |= (uint8_t)(1u << c);
-      }
-    break;
-  }
-
-  case FX_RAIN:
-    for (c = 0; c < 7; c++) {
-      int drop = (int)((p / 2u + (uint32_t)(c * 5)) % 13u) - 3;
-      for (int k = 0; k < 3; k++) {
-        int rr = drop - k;
-        if (rr >= 0 && rr < 7) fb[rr] |= (uint8_t)(1u << c);
-      }
-    }
-    break;
-
-  case FX_HEART: {
-    static const uint8_t BIG[7] = {0x36,0x7F,0x7F,0x3E,0x1C,0x08,0x00};
-    static const uint8_t SM[7]  = {0x00,0x36,0x7F,0x3E,0x1C,0x08,0x00};
-    const uint8_t *h = ((p / 6u) & 1u) ? BIG : SM;
-    for (r = 0; r < 7; r++) fb[r] = h[r];
-    break;
-  }
-
-  case FX_BALL: {
-    static int16_t bx = 8, by = 12;
-    static int8_t vx = 2, vy = 3;
-    static uint32_t bp = 0xFFFFFFFFu;
-    if (p != bp) {
-      bp = p;
-      if (p == 0) { bx = 8; by = 12; vx = 2; vy = 3; }
-      bx += vx;
-      by += vy;
-      if (bx < 0) { bx = 0; vx = (int8_t)-vx; }
-      else if (bx > 24) { bx = 24; vx = (int8_t)-vx; }
-      if (by < 0) { by = 0; vy = (int8_t)-vy; }
-      else if (by > 24) { by = 24; vy = (int8_t)-vy; }
-    }
-    int rr = by >> 2;
-    int cc = bx >> 2;
-    fb[rr] |= (uint8_t)(1u << cc);
-    int8_t tr = (vy > 0) ? -1 : 1;
-    int8_t tc = (vx > 0) ? -1 : 1;
-    for (int k = 1; k <= 2; k++) {
-      int r2 = rr + tr * k;
-      int c2 = cc + tc * k;
-      if (r2 >= 0 && r2 < 7 && c2 >= 0 && c2 < 7) fb[r2] |= (uint8_t)(1u << c2);
-    }
-    break;
-  }
-
-  case FX_CHEVRON: {
-    static const uint8_t CHEV[5] = {0x41,0x22,0x14,0x08,0x08};
-    for (c = 0; c < 7; c++) {
-      uint8_t x = (uint8_t)((p + c) % 6u);
-      if (x >= 5) continue;
-      for (r = 0; r < 7; r++)
-        if (CHEV[x] & (1u << r)) fb[r] |= (uint8_t)(1u << c);
-    }
-    break;
-  }
-
-  case FX_FACE: {
-    static uint8_t emo = 0, last = 0xFF, hold = 0;
-    static uint8_t blinkWait = 12, blink = 0;
-    static uint32_t seed = 0x2545F491u;
-    static uint32_t fp = 0xFFFFFFFFu;
-    if (p != fp) {
-      fp = p;
-      if (p == 0) { hold = 0; blink = 0; blinkWait = 12; last = 0xFF; }
-      if (hold == 0) {
-        seed = hash32(seed + p + 0x9E3779B9u);
-        emo = (uint8_t)(seed % FACE_COUNT);
-        if (emo == last) emo = (uint8_t)((emo + 1u) % FACE_COUNT);
-        last = emo;
-        hold = (uint8_t)(14u + ((seed >> 8) % 32u));
-      } else hold--;
-      if (blink) blink--;
-      else if (blinkWait) blinkWait--;
-      else {
-        blink = 2;
-        blinkWait = (uint8_t)(18u + (hash32(p + seed) % 32u));
-      }
-    }
-    for (r = 0; r < 7; r++) fb[r] = FACE[emo][r];
-    if (blink) { fb[1] = 0; fb[2] = 0x36; fb[3] = 0; }
-    break;
-  }
-
-  }
-}
+// ----------------------------------------------------------------- setup ---
 
 void setup() {
-  RCC->APB2PCENR |= (1u << 0) | (1u << 2) | (1u << 4) | (1u << 5);
+    delay(100);   // let the rails settle before driving the matrix
 
-  SystemCoreClock = 24000000UL;
-  SysTick->CTLR = 0;
-  SysTick->CNT  = 0;
-  SysTick->CMP  = 24000000UL / 1000UL - 1UL;
-  SysTick->SR   = 0;
-  SysTick->CTLR = 0xF;
+    // Clocks for GPIOA, GPIOC, GPIOD and AFIO.
+    RCC->APB2PCENR |= (1u << 0) | (1u << 2) | (1u << 4) | (1u << 5);
 
-  AFIO->PCFR1 &= ~(1u << 15);
+    // millis() needs SysTick. The Arduino core normally starts it; this is the
+    // fallback for when it has not, and it assumes the 24 MHz HSI clock.
+    if ((SysTick->CTLR & 0x1u) == 0) {
+        SystemCoreClock = 24000000UL;
+        SysTick->CTLR = 0;
+        SysTick->CNT  = 0;
+        SysTick->CMP  = SystemCoreClock / 1000UL - 1UL;
+        SysTick->SR   = 0;
+        SysTick->CTLR = 0xF;
+    }
 
-  GPIOC->CFGLR = 0x22222222u;
-  GPIOD->CFGLR = (GPIOD->CFGLR & ~D_CATH_MASK) | (0x22222222u & D_CATH_MASK);
-  GPIOD->CFGLR = (GPIOD->CFGLR & ~NIB(7)) | (CFG_PU << 28);
-  GPIOD->OUTDR |= (1u << 7);
+    // PD7 is NRST from the factory. This only works once the option bytes have
+    // been written (USER = 0x1F); see docs/hardware.md.
+    AFIO->PCFR1 &= ~(1u << 15);
 
-  GPIOA->CFGLR = (GPIOA->CFGLR & ~NIB(1)) | (CFG_PU << 4);
-  GPIOA->OUTDR |= (1u << 1);
+    // Rows and columns: push-pull output, 2 MHz. Do not raise the speed, the
+    // matrix has no series resistors and the pins are the current limit.
+    GPIOC->CFGLR = 0x22222222u;
+    GPIOD->CFGLR = (GPIOD->CFGLR & ~D_COL_MASK_NIB) | (0x22222222u & D_COL_MASK_NIB);
 
-  allOff();
+    // BTN1 and BTN2: input with pull-up.
+    GPIOD->CFGLR = (GPIOD->CFGLR & ~BTN1_PIN_NIB) | (0x8u << (7 * 4));
+    GPIOD->OUTDR |= BTN1_OUTDR_BIT;
+    GPIOA->CFGLR = (GPIOA->CFGLR & ~BTN2_PIN_NIB) | (0x8u << (1 * 4));
+    GPIOA->OUTDR |= BTN2_OUTDR_BIT;
+
+    // Text length in columns, computed once.
+    for (int i = 0; i < MSG_COUNT; i++)
+        g_msg_cols[i] = (uint16_t)(utf8_len(MSGS[i]) * 6);
+
+    // BTN2 also wakes the core from WFI, so it needs an EXTI line.
+    attachInterrupt(BTN2_PIN, GPIO_Mode_IPU, wake_isr, EXTI_Mode_Interrupt, EXTI_Trigger_Falling);
+
+    lastFrame = millis();
+    lastBlend = millis();
+    allOff();
 }
 
+// ------------------------------------------------------------------ loop ---
+
 void loop() {
-  static uint8_t fx = 0;
-  static uint32_t p = 0;
-  static uint32_t lastBlend = 0;
-  static uint32_t lastFrame = 0;
-  static uint8_t asleep = 0;
-  static uint8_t b1prev = 0, b2prev = 0;
-  static uint32_t b1lock = 0, b2lock = 0;
+    static uint8_t  b1prev    = 0, b2prev = 0;
+    static uint32_t b1lock    = 0, b2lock = 0;
+    uint32_t ms = millis();
+    uint8_t  b1 = readB1();
+    uint8_t  b2 = readB2();
 
-  uint32_t ms = millis();
-  uint8_t b1 = (GPIOD->INDR & (1u << 7)) ? 0 : 1;
-  uint8_t b2 = (GPIOA->INDR & (1u << 1)) ? 0 : 1;
-
-  if (b2 && !b2prev && (uint32_t)(ms - b2lock) >= DEBOUNCE_MS) {
-    b2lock = ms;
-    asleep = !asleep;
-    if (asleep) allOff();
-    else { lastFrame = ms; lastBlend = ms; }
-  }
-  b2prev = b2;
-
-  if (b1 && !b1prev && (uint32_t)(ms - b1lock) >= DEBOUNCE_MS) {
-    b1lock = ms;
-    if (!asleep) {
-      fx = (uint8_t)((fx + 1u) % FX_COUNT);
-      p = 0;
-      lastFrame = ms;
-      lastBlend = ms;
+    // BTN2: sleep. The call blocks until the button is released and returns
+    // after the wake-up press, so nothing else has to know about it.
+    if (b2 && !b2prev && (uint32_t)(ms - b2lock) >= DEBOUNCE_MS) {
+        b2lock = ms;
+        enterSleepMode();
     }
-  }
-  b1prev = b1;
+    b2prev = b2;
 
-  if (asleep) {
-    allOff();
-    delay(20);
-    return;
-  }
+    // BTN1: next step, and clear the fade buffers so text fades in from black.
+    if (b1 && !b1prev && (uint32_t)(ms - b1lock) >= DEBOUNCE_MS) {
+        b1lock = ms;
+        current_step = (current_step + 1) % TOTAL_STEPS;
+        current_p = 0;
+        lastFrame = ms - SPEED_MS;
+        lastBlend = ms - 15u;
+        for (int r = 0; r < 7; r++) {
+            fb[r] = 0;
+            for (int c = 0; c < 7; c++) px[r][c] = 0;
+        }
+    }
+    b1prev = b1;
 
-  renderFrame();
+    // Advance the animation on a fixed time base, not per frame.
+    if ((uint32_t)(ms - lastFrame) >= SPEED_MS) {
+        lastFrame = ms;
+        build_frame(current_step, current_p);
+        current_p++;
+    }
 
-  if ((uint32_t)(ms - lastBlend) >= 15u) {
-    lastBlend = ms;
-    blendFrame();
-  }
+    // Text and the chevrons are bitmap based and get the fade; the distance
+    // effects already produce a PWM value per LED.
+    if (current_step < MSG_COUNT || (current_step - MSG_COUNT) == 2) {
+        if ((uint32_t)(ms - lastBlend) >= 15u) {
+            lastBlend = ms;
+            blendFrame();
+        }
+    }
 
-  if ((uint32_t)(ms - lastFrame) >= STEP_MS) {
-    lastFrame = ms;
-    build_frame(fx, p);
-    p++;
-  }
+    renderFrame();
 }
