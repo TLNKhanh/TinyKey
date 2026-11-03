@@ -16,8 +16,9 @@ Dates are when the work happened on the bench, not release dates.
 - Scroll text changed to `Nam Khanh` and the prebuilt Arduino binary rebuilt
   (8932 B flash, 9100 B bin).
 - Added real photos of the assembled keychain (front with the LEDs running,
-  back with the cell taped over the charger) and published the repo as
-  [TLNKhanh/tinykey](https://github.com/TLNKhanh/tinykey).
+  back with the cell taped over the charger), published the repo as
+  [TLNKhanh/TinyKey](https://github.com/TLNKhanh/TinyKey), then rewrote the
+  README around the ten cent MCU and the V1 (built) vs V2 (not built) split.
 
 ## 2026-11-01 - hardware v2
 

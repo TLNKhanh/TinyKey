@@ -13,6 +13,16 @@ TP4056 charger on a two-layer board about 35 x 45 mm. Open
 | `gerbers/` | gerbers, job file and PTH/NPTH drills |
 | `TinyKeyV2_gerbers.zip` | the same plot zipped for a fab house |
 | `archive/` | earlier outlines and revisions |
+| `archive/TinyKeyV1.kicad_pcb` | V1, 40 x 52 mm, the board that was built |
+
+## V1 and V2
+
+`TinyKey.kicad_pcb` here is **V2**: 35 x 45.4 mm, tighter outline, ground pours
+redone, DRC clean. It has not been manufactured.
+
+The photos in `../docs/images/photo-*.jpg` are **V1**, 40 x 52 mm, the revision
+that actually came back from the fab and has all 49 LEDs soldered backwards.
+Same circuit, same firmware, bigger board.
 
 ## Reading it without KiCad
 

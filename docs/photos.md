@@ -1,18 +1,19 @@
 # Photo notes
 
 The README uses two real photos (`photo-front.jpg`, `photo-back.jpg`, shot on a
-Galaxy A25 in Nov 2026). The rest of `docs/images/` is generated from the KiCad
-files.
+Galaxy A25 in Nov 2026). Both show the **V1** prototype, the board that was
+actually manufactured. Everything else in `docs/images/` is generated from the
+V2 KiCad files.
 
 ## What is in the repo
 
 | File | Status | What |
 |---|---|---|
-| `photo-front.jpg` | done | assembled board, LEDs running, keyring on |
-| `photo-back.jpg` | done | back side with the cell, TP4056, USB-C, buttons |
-| `board-top.png`, `board-bottom.png` | render | KiCad 3D render of the bare board |
-| `board-hero.jpg` | render | 3/4 render, kept as the fallback hero |
-| `schematic.png` | export | schematic preview used in the README |
+| `photo-front.jpg` | done, V1 | assembled board, LEDs running, keyring on |
+| `photo-back.jpg` | done, V1 | back side with the cell, TP4056, USB-C, buttons |
+| `board-top.png`, `board-bottom.png` | render, V2 | KiCad 3D render of the bare board |
+| `board-hero.jpg` | render, V2 | 3/4 render, kept as the fallback hero |
+| `schematic.png` | export, V2 | schematic preview used in the README |
 
 ## Still missing
 
