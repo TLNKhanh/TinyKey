@@ -11,6 +11,8 @@ Dates are when the work happened on the bench, not release dates.
   follows the picture while the text scrolls.
 - Added readme/docs, MIT license, flashing helpers and reproducible prebuilt
   binaries.
+- Added 3D renders, schematic and PCB PDFs, a BOM export, and filled in the
+  schematic title block (TinyKey, rev v2, author).
 
 ## 2026-11-01 - hardware v2
 

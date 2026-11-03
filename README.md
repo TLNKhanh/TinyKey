@@ -1,141 +1,119 @@
 # TinyKey
 
-A 7x7 LED keychain: **CH32V003F4P6**, USB-C, a LiPo charger, 49 LEDs behind
-the front face and a 5 mm keyring hole. This repository contains the firmware
-and the KiCad hardware.
+A keychain with 49 LEDs on the front and a CH32V003 doing the work.
 
-```
-  +-------------------+
-  |  # # # # # # #    |   49 LEDs, row-scanned at ~570 Hz
-  |  # # # # # # #    |   15-step software PWM dimming
-  |  # # # # # # #    |   8 effects, 5x7 font, sleep mode
-  |  # # # # # # #    |
-  |  # # # # # # #    |
-  |  # # # # # # #    |
-  |  # # # # # # #    |
-  +---------+---------+
-          keyring
-```
+This started as a "can I build a display small enough to actually carry" project.
+The CH32V003F4P6 turned out to be a good fit: 16 kB flash, 2 kB RAM, a 48 MHz
+RISC-V core, and it happily runs from a small LiPo. So the board got a 7x7
+matrix on one side, a TP4056 charger and a USB-C socket on the other, and a
+5 mm hole in the neck for the keyring.
 
 ![TinyKey board, front side](docs/images/board-hero.jpg)
 
-## Features
+## The hardware
 
-- 7x7 LED matrix multiplexed onto 14 GPIOs, scanned one row at a time
-  (constant 7-step frame, ~1/7 duty, no visible flicker)
-- Software PWM (15 levels) so effects can fade and the text scroll can move in
-  sub-pixel steps
-- 8 effects on the current sketch: text scroll, wave, ripple, rain, heart,
-  bounce, chevron, animated face
-- 5x7 font, 70 glyphs, UTF-8 aware (basic Latin + `à`)
-- `BTN1` cycles effects, `BTN2` sleeps/wakes
-- Runs off a single LiPo through a TP4056; USB-C is power-only
+The front is 49 0805 LEDs wired as 7 anode rows and 7 cathode columns - the
+whole matrix runs on 14 GPIOs. The back carries the MCU, the charger, a USB-C
+socket (power only; the data pins go nowhere), two buttons, SWIO pads for
+programming and B+/B- pads for the battery. The board is about 35 x 45 mm,
+two layers.
 
-## Repository layout
+Two details are worth knowing before building one:
 
-| Path | What it is |
-|---|---|
-| `firmware/arduino/tinykey_v2/` | **main firmware** - Arduino sketch for the WCH core |
-| `firmware/arduino/legacy/` | earlier sketches kept for reference (see its README) |
-| `firmware/c/` | C firmware on ch32v003fun, 14 effects, ~3.3 kB |
-| `bringup/` | six tiny sketches used to bring the first board up |
-| `hardware/` | KiCad PCB + schematic, gerbers and the fab zip |
-| `host/` | Windows helper to bind WinUSB to the WCH-Link |
-| `tools/` | `flash.sh` / `verify.sh` for Linux and macOS |
-| `prebuilt/` | ready-to-flash `.bin` files with checksums |
-| `docs/` | hardware, option bytes and flashing notes |
+- The first batch came back with all 49 LEDs soldered backwards. Instead of
+  reworking 49 parts I flipped the drive polarity in firmware: a lit LED is
+  anode LOW, cathode HIGH. That is still how it works.
+- There are no series resistors on the matrix. Current is limited by keeping
+  the GPIO drive at 2 MHz. Raising it to get a brighter display is how you cook
+  the pins.
 
-## Quick start
-
-You need a **WCH-Link** (or WCH-LinkE) on the 3-pin SWIO header and
-`minichlink` - see [docs/flashing.md](docs/flashing.md). There is **no USB
-bootloader**: the USB-C data pins are not connected to the MCU, so SWIO is the
-only way in.
-
-Flash the prebuilt main firmware:
-
-```bash
-timeout 30 minichlink -w prebuilt/tinykey_v2.bin flash -b
-```
-
-Build it yourself with the WCH Arduino core
-(`WCH:ch32v:CH32V00x_EVT:pnum=CH32V003F4`):
-
-```bash
-arduino-cli compile --fqbn WCH:ch32v:CH32V00x_EVT:pnum=CH32V003F4 \
-  --output-dir out firmware/arduino/tinykey_v2
-timeout 30 minichlink -w out/tinykey_v2.ino.bin flash -b
-```
-
-Or build the C version (needs `riscv-none-elf-gcc` and
-[ch32v003fun](https://github.com/cnlohr/ch32v003fun) cloned as a sibling
-directory):
-
-```bash
-cd firmware/c
-make            # or: powershell -File build.ps1
-make flash
-```
-
-## Controls
-
-| Button | Pin | Action |
-|---|---|---|
-| `BTN1` | PD7 | next effect |
-| `BTN2` | PA1 | sleep / wake |
-
-> **PD7 is NRST by default.** The board ships with the reset function enabled,
-> so `BTN1` reboots the MCU instead of changing effect. The option bytes on the
-> prototype were rewritten to `USER = 0x1F` (reset IO disabled) - see
-> [docs/hardware.md](docs/hardware.md#pd7-is-nrst-by-default). Do this before
-> wondering why the button "blinks an LED".
-
-## Board quirks worth knowing
-
-- All 49 front LEDs are soldered **backwards**; the firmware inverts the drive
-  polarity (`POL_REVERSED` / reversed drive in the sketch). No desoldering.
-- There are **no series resistors** on the matrix. Current is limited only by
-  the 2 MHz GPIO drive setting - do not raise it to get a brighter display.
-- `PD1` is SWIO. The matrix deliberately skips it (`K3` is on `PD2`).
-- The first prototype's `BTN2` did not read reliably; sleep/wake is a bonus,
-  not a requirement.
-
-## Documentation
-
-- [docs/hardware.md](docs/hardware.md) - pin map, polarity, current limits,
-  option bytes, PCB revisions and gerbers
-- [docs/flashing.md](docs/flashing.md) - WCH-Link, minichlink, WinUSB on
-  Windows, verification and troubleshooting
-- [firmware/arduino/README.md](firmware/arduino/README.md) - sketch features,
-  text editing, legacy sketches
-- [firmware/c/README.md](firmware/c/README.md) - C firmware, 14 effects
-- [CHANGELOG.md](CHANGELOG.md) - how the board and firmware evolved
-- [hardware/README.md](hardware/README.md) - board files, fabrication notes,
-  how the renders are generated
-- [docs/photos.md](docs/photos.md) - shot list for real photos of the board
-
-## Pictures and fabrication files
+There is one more trap. BTN1 is on PD7, which is NRST from the factory, so the
+option bytes have to disable the reset function (`USER = 0x1F`) or the button
+reboots the chip instead of changing effect. The exact bytes and commands are
+in [docs/hardware.md](docs/hardware.md#pd7-is-nrst-by-default).
 
 | Front (49 LEDs) | Back (MCU, charger, buttons) |
 |---|---|
 | ![PCB front](docs/images/board-top.png) | ![PCB back](docs/images/board-bottom.png) |
 
-![Schematic](docs/images/schematic.png)
+Everything you need to build or order one:
 
-- [Schematic (PDF)](docs/hardware/TinyKey-schematic.pdf)
-- [Gerbers](hardware/gerbers) and the [fab zip](hardware/TinyKeyV2_gerbers.zip)
-- The PCB pictures are 3D renders generated from `hardware/TinyKey.kicad_pcb`
-  with `kicad-cli pcb render`, so they match the current board. They will be
-  replaced by real photos of the assembled keychain; the shot list is in
-  [docs/photos.md](docs/photos.md).
+- [Schematic PDF](docs/hardware/TinyKey-schematic.pdf) and
+  [PNG preview](docs/images/schematic.png)
+- [PCB top PDF](docs/hardware/TinyKey-pcb-top.pdf) and
+  [PCB bottom PDF](docs/hardware/TinyKey-pcb-bottom.pdf)
+- [Gerbers](hardware/gerbers), [fab zip](hardware/TinyKeyV2_gerbers.zip),
+  [BOM](hardware/bom.csv)
+- KiCad project: [hardware/](hardware/)
+
+The pictures above are renders generated from the board file, so they cannot
+go stale. Real photos will replace them once I have a finished unit; the shot
+list is in [docs/photos.md](docs/photos.md).
+
+## The software
+
+There are two firmwares in the repo.
+
+[`firmware/arduino/tinykey_v2`](firmware/arduino/tinykey_v2) is the current
+sketch. It uses the WCH Arduino core and does 15-step software PWM per LED,
+which gives fades and sub-pixel text scrolling. Eight effects: text scroll,
+wave, ripple, rain, heart, bounce, chevron, and a small face that blinks -
+because a 7x7 display deserves a face.
+
+[`firmware/c`](firmware/c) is the smaller ch32v003fun version: one C file,
+14 effects, no Arduino layer. It is the firmware that first ran on the board
+and is a decent starting point if you want to stay close to the metal.
+
+Both use a row scan: one anode line at a time, only that row's lit cathodes
+on, seven steps per frame. A frame always takes seven steps whether a row is
+empty or not - skipping empty rows makes the brightness pump while text
+scrolls. Each LED gets 1/7 duty, the frame runs around 570 Hz, and that is why
+the dwell in the renderer is unconditional.
+
+Controls: BTN1 cycles effects, BTN2 sleeps and wakes. BTN2 was unreliable on my
+prototype, so treat sleep as a bonus.
+
+### Build and flash
+
+There is no USB bootloader. Programming goes through SWIO (PD1) with a
+WCH-Link. Short version:
+
+```bash
+# Arduino firmware
+arduino-cli compile --fqbn WCH:ch32v:CH32V00x_EVT:pnum=CH32V003F4 \
+  --output-dir out firmware/arduino/tinykey_v2
+timeout 30 minichlink -w out/tinykey_v2.ino.bin flash -b
+
+# C firmware (needs riscv-none-elf-gcc, ch32v003fun cloned as a sibling)
+cd firmware/c
+make
+make flash
+```
+
+Or flash one of the [prebuilt binaries](prebuilt/). Windows WinUSB setup, the
+option-byte write and the usual minichlink problems are covered in
+[docs/flashing.md](docs/flashing.md).
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `firmware/arduino/tinykey_v2/` | current firmware, WCH Arduino core |
+| `firmware/arduino/legacy/` | earlier sketches, kept for reference |
+| `firmware/c/` | ch32v003fun firmware, 14 effects |
+| `bringup/` | six small sketches used to bring the first board up |
+| `hardware/` | KiCad project, gerbers, BOM, fab zip |
+| `docs/` | pin map, option bytes, flashing, photo notes |
+| `host/` | Windows helper to bind WinUSB to the WCH-Link |
+| `tools/` | `flash.sh` and `verify.sh` for Linux/macOS |
+| `prebuilt/` | ready-to-flash binaries and checksums |
 
 ## Status
 
-Personal prototype hardware, firmware works. `firmware/c` is the build that ran
-on the first board; `tinykey_v2` is the newer Arduino rewrite and compiles at
-8928 B of 16384 B flash. The prebuilt binaries are built from the sources here
-(and the Arduino one rebuilds byte-for-byte), but check them on your own board
-before trusting them.
+Working prototype. The C firmware is the build that ran on the first board;
+the Arduino sketch is the newer rewrite and compiles to 8928 B of 16 kB. The
+prebuilt binaries come from the sources here, but flash and check them on your
+own board - they were built, not blessed.
 
 ## License
 

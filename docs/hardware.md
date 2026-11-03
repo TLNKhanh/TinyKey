@@ -111,6 +111,14 @@ available if you want the matrix to show charging state.
 | `hardware/gerbers/` | plot of the current board: 9 gerbers, job file, PTH/NPTH drill |
 | `hardware/TinyKeyV2_gerbers.zip` | the same plot zipped for a fab house |
 
+Printable exports live in `docs/`: the
+[schematic PDF](hardware/TinyKey-schematic.pdf), the
+[PCB top](hardware/TinyKey-pcb-top.pdf) and
+[PCB bottom](hardware/TinyKey-pcb-bottom.pdf) PDFs, and the
+[BOM](../hardware/bom.csv). The BOM lists 50 LEDs (49 matrix + D50), one
+CH32V003, one TP4056, the USB-C socket and the passives, with DNP parts
+excluded.
+
 DRC on the current board: **0 errors, 0 unconnected**. The remaining warnings
 are a library-footprint mismatch on the MCU and USB-C footprints and two
 silkscreen texts 0.7 mm tall (minimum is 0.8 mm); neither affects fabrication.
