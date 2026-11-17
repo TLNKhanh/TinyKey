@@ -1,9 +1,9 @@
 # Photo notes
 
 The README shows real photos of both revisions, shot on a Galaxy A25. The
-V2 board (manufactured Nov 2026) is the current one: front with the matrix
-lit, back with the cell. Everything else in `docs/images/v2/` is generated
-from the V2 KiCad files. `docs/images/` is split per revision:
+V2 board (fabbed Nov 2026) is the current one — front with the matrix lit,
+back with the cell. Everything else in `docs/images/v2/` is generated from the
+V2 KiCad files. `docs/images/` is split per revision:
 
 - `docs/images/v1/` - the V1 prototype (40 x 52 mm)
 - `docs/images/v2/` - the V2 board (35 x 45.4 mm, current)

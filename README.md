@@ -25,18 +25,18 @@ keychain that is a good trade.
 
 ## V1 or V2?
 
-Both revisions are built and they are easy to mix up.
+Two revisions, easy to mix up. Here they are side by side.
 
 | | V1 | V2 |
 |---|---|---|
 | Photos | [front](docs/images/v1/photo-front.jpg) · [back](docs/images/v1/photo-back.jpg) | [front](docs/images/v2/photo-front.jpg) · [back](docs/images/v2/photo-back.jpg) |
 | Board file | `hardware/archive/TinyKeyV1.kicad_pcb` | `hardware/TinyKey.kicad_pcb` |
-| Built | yes, ran first | yes, current build (fabbed Nov 2026) |
+| Built | yes | yes — current build, fabbed Nov 2026 |
 | Size | 40 x 52 mm | 35 x 45.4 mm |
 | What changed | the prototype | tighter outline, ground pours redone, DRC clean, neck + 5 mm hole |
 
-If you want to order a board, use V2. The V2 photos show the solder mask:
-front purple, matrix lit, neck and hole on top.
+If you're ordering boards, order V2. Same circuit, tighter outline, and this
+time the solder mask is purple.
 
 ## The hardware
 
@@ -105,9 +105,9 @@ helper and flash scripts, `prebuilt/` the binaries.
 
 ## Status
 
-Both boards work. V2 is the current board (35 x 45.4 mm, manufactured
-November 2026); V1 is the 40 x 52 mm prototype. The Arduino sketch compiles
-to 9172 B of 16 kB. The prebuilt binaries came from these sources, but I have
-not tried them on anyone else's board.
+Both boards work. V2 is the one I would build if you asked me today — 35 x
+45.4 mm, fabricated in November 2026. V1 is the 40 x 52 mm prototype, still
+running. The Arduino sketch compiles to 9172 B of 16 kB. The prebuilt binaries
+came from these sources, but I have not tried them on anyone else's board.
 
 MIT, see [LICENSE](LICENSE).
