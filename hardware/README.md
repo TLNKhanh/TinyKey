@@ -18,7 +18,7 @@ TP4056 charger on a two-layer board about 35 x 45 mm. Open
 ## V1 and V2
 
 `TinyKey.kicad_pcb` here is **V2**: 35 x 45.4 mm, tighter outline, ground pours
-redone, DRC clean. It has not been manufactured.
+redone, DRC clean. First batch manufactured November 2026.
 
 The photos in `../docs/images/photo-*.jpg` are **V1**, 40 x 52 mm, the revision
 that actually came back from the fab and has all 49 LEDs soldered backwards.
@@ -50,7 +50,7 @@ The images in `../docs/images/` are generated from the board file, so they stay
 in sync:
 
 ```bash
-kicad-cli pcb render --output docs/images/board-top.png --side top \
+kicad-cli pcb render --output docs/images/v2/board-top.png --side top \
   --width 1600 --height 1200 --quality high --background opaque --floor \
   hardware/TinyKey.kicad_pcb
 ```

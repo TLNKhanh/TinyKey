@@ -124,10 +124,10 @@ care about standby life, that is the first thing to put a meter on.
 
 | File | Notes |
 |---|---|
-| `hardware/TinyKey.kicad_pcb` / `.kicad_pro` | current board (V2, 35 x 45.4 mm), neck + 5 mm hole, ground zones on both layers. **Not manufactured yet.** |
+| `hardware/TinyKey.kicad_pcb` / `.kicad_pro` | current board (V2, 35 x 45.4 mm), neck + 5 mm hole, ground zones on both layers. Manufactured November 2026, first batch. |
 | `hardware/TinyKey.kicad_sch` | schematic |
 | `hardware/archive/TinyKey-keychain.*` | first keychain outline, before the neck |
-| `hardware/archive/TinyKeyV1.kicad_pcb` | V1, 40 x 52 mm. The board that was actually built and is in the README photos |
+| `hardware/archive/TinyKeyV1.kicad_pcb` | V1, 40 x 52 mm. The prototype, in the v1 photos |
 | `hardware/archive/TinyKey2.*` | intermediate revision |
 | `hardware/gerbers/` | plot of the current board: 9 gerbers, job file, PTH/NPTH drill |
 | `hardware/TinyKeyV2_gerbers.zip` | the same plot zipped for a fab house |

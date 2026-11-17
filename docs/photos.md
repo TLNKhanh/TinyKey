@@ -1,27 +1,32 @@
 # Photo notes
 
-The README uses two real photos (`photo-front.jpg`, `photo-back.jpg`, shot on a
-Galaxy A25 in Nov 2026). Both show the **V1** prototype, the board that was
-actually manufactured. Everything else in `docs/images/` is generated from the
-V2 KiCad files.
+The README shows real photos of both revisions, shot on a Galaxy A25. The
+V2 board (manufactured Nov 2026) is the current one: front with the matrix
+lit, back with the cell. Everything else in `docs/images/v2/` is generated
+from the V2 KiCad files. `docs/images/` is split per revision:
+
+- `docs/images/v1/` - the V1 prototype (40 x 52 mm)
+- `docs/images/v2/` - the V2 board (35 x 45.4 mm, current)
 
 ## What is in the repo
 
 | File | Status | What |
 |---|---|---|
-| `photo-front.jpg` | done, V1 | assembled board, LEDs running, keyring on |
-| `photo-back.jpg` | done, V1 | back side with the cell, TP4056, USB-C, buttons |
-| `board-top.png`, `board-bottom.png` | render, V2 | KiCad 3D render of the bare board |
-| `board-hero.jpg` | render, V2 | 3/4 render, kept as the fallback hero |
-| `schematic.png` | export, V2 | schematic preview used in the README |
+| `v1/photo-front.jpg` | done, V1 | assembled prototype, LEDs running |
+| `v1/photo-back.jpg` | done, V1 | back side with the cell, TP4056, USB-C, buttons |
+| `v2/photo-front.jpg` | done, V2 | manufactured board, matrix lit |
+| `v2/photo-back.jpg` | done, V2 | back side with the cell, TP4056, USB-C, buttons |
+| `v2/board-top.png`, `v2/board-bottom.png` | render, V2 | KiCad 3D render of the bare board |
+| `v2/board-hero.jpg` | render, V2 | 3/4 render, kept as the fallback hero |
+| `v2/schematic.png` | export, V2 | schematic preview used in the README |
 
 ## Still missing
 
 | File | When | What |
 |---|---|---|
-| `demo.gif` | assembled | 5-8 s loop of the effects, LEDs lit |
-| `photo-bare-front.jpg` | next fab run | LED side before soldering |
-| `photo-bare-back.jpg` | next fab run | charger/MCU side before soldering |
+| `demo.gif` | recording | 5-8 s loop of the effects, LEDs lit |
+| `v2/photo-bare-front.jpg` | next batch | LED side before soldering |
+| `v2/photo-bare-back.jpg` | next batch | charger/MCU side before soldering |
 
 ## Shooting them
 

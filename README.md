@@ -2,7 +2,7 @@
 
 A keychain with 49 LEDs on the front and a ten cent MCU doing the work.
 
-<p align="center"><img src="docs/images/photo-front.jpg" width="560" alt="TinyKey keychain, front side lit"></p>
+<p align="center"><img src="docs/images/v1/photo-front.jpg" width="560" alt="TinyKey keychain, front side lit"></p>
 
 I built this because I wanted to find out how much display you can get out of a
 microcontroller that costs less than a coffee. The answer, it turns out, is a
@@ -25,19 +25,18 @@ keychain that is a good trade.
 
 ## V1 or V2?
 
-There are two revisions and they are easy to mix up. The photos are V1, the
-files in `hardware/` are V2, and V2 has never been manufactured.
+Both revisions are built and they are easy to mix up.
 
 | | V1 | V2 |
 |---|---|---|
-| Shown in | the photos below | the 3D renders and PDFs |
+| Photos | [front](docs/images/v1/photo-front.jpg) · [back](docs/images/v1/photo-back.jpg) | [front](docs/images/v2/photo-front.jpg) · [back](docs/images/v2/photo-back.jpg) |
 | Board file | `hardware/archive/TinyKeyV1.kicad_pcb` | `hardware/TinyKey.kicad_pcb` |
-| Built | yes, it runs | no, files only |
+| Built | yes, ran first | yes, current build (fabbed Nov 2026) |
 | Size | 40 x 52 mm | 35 x 45.4 mm |
-| What changed | the prototype | tighter outline, ground pours redone, DRC clean |
+| What changed | the prototype | tighter outline, ground pours redone, DRC clean, neck + 5 mm hole |
 
-If you want to order a board, use V2. The photos are just what the thing looks
-like assembled, with a cell and a keyring on it.
+If you want to order a board, use V2. The V2 photos show the solder mask:
+front purple, matrix lit, neck and hole on top.
 
 ## The hardware
 
@@ -55,9 +54,9 @@ bytes (`USER = 0x1F`) or the button reboots the chip instead of changing effect.
 The bytes and commands are in
 [docs/hardware.md](docs/hardware.md#pd7-is-nrst-by-default).
 
-| Front, 49 LEDs lit | Back, cell taped over the charger |
+| V2 front, matrix lit | V2 back, cell taped over the charger |
 |---|---|
-| ![TinyKey front](docs/images/photo-front.jpg) | ![TinyKey back](docs/images/photo-back.jpg) |
+| ![TinyKey V2 front](docs/images/v2/photo-front.jpg) | ![TinyKey V2 back](docs/images/v2/photo-back.jpg) |
 
 Everything for ordering: [schematic PDF](docs/hardware/TinyKey-schematic.pdf),
 [PCB top](docs/hardware/TinyKey-pcb-top.pdf) and
@@ -106,8 +105,9 @@ helper and flash scripts, `prebuilt/` the binaries.
 
 ## Status
 
-V1 works. V2 is files and gerbers, not silicon. The Arduino sketch compiles to
-9172 B of 16 kB. The prebuilt binaries came from these sources, but I have not
-tried them on anyone else's board.
+Both boards work. V2 is the current board (35 x 45.4 mm, manufactured
+November 2026); V1 is the 40 x 52 mm prototype. The Arduino sketch compiles
+to 9172 B of 16 kB. The prebuilt binaries came from these sources, but I have
+not tried them on anyone else's board.
 
 MIT, see [LICENSE](LICENSE).
